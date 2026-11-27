@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>فارسی‌ساز</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef2f7;--ink:#14213d;--muted:#5b6678;--teal:#1b998b;--saffron:#f4a300;--card:#fff;--line:#d5dce6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Vazirmatn,Tahoma,sans-serif;line-height:1.8}
+header{background:var(--ink);color:#fff}
+.bar{max-width:880px;margin:auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{font-weight:800;font-size:1.25rem}
+.user{display:flex;align-items:center;gap:10px;font-size:.9rem}
+.user img{width:32px;height:32px;border-radius:50%}
+button,.btn{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:8px 16px;background:var(--teal);color:#fff;font-weight:600;text-decoration:none;display:inline-block}
+button.ghost{background:transparent;border:1px solid #ffffff66}
+button:focus-visible,.btn:focus-visible{outline:3px solid var(--saffron);outline-offset:2px}
+main{max-width:880px;margin:auto;padding:36px 20px 60px}
+h1{font-size:clamp(1.8rem,5vw,2.6rem);font-weight:800;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 28px;max-width:60ch}
+.notice{background:#fff7e0;border:1px solid var(--saffron);padding:12px 16px;border-radius:8px;margin-bottom:20px}
+.game{background:var(--card);border:1px solid var(--line);border-inline-start:5px solid var(--teal);border-radius:10px;padding:18px 20px;margin-bottom:14px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.game.soon{border-inline-start-color:var(--saffron)}
+.game h2{margin:0;font-size:1.15rem}
+.game p{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.tag{font-size:.8rem;color:var(--muted)}
+.soonlabel{color:var(--muted);font-size:.9rem}
+footer{text-align:center;color:var(--muted);font-size:.85rem;padding-bottom:30px}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <div class="logo">فارسی‌ساز</div>
+  <div id="auth"></div>
+</div></header>
+
+<main>
+  <h1>بازی‌هایت را فارسی بازی کن</h1>
+  <p class="lead">فارسی‌ساز بازی‌ها اینجا جمع شده است. برای دانلود، با حساب گیت‌هاب وارد شو.</p>
+  <div id="notice"></div>
+  <div id="list">در حال بارگذاری...</div>
+</main>
+<footer>ساخته‌شده روی GitHub Pages</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ===== تنظیمات: این دو مقدار را از Supabase کپی کن ===== */
+const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY";
+/* اگر false کنی، دانلود برای همه آزاد می‌شود و لاگین فقط اختیاری است */
+const REQUIRE_LOGIN_TO_DOWNLOAD = true;
+/* ======================================================= */
+
+const configured = !SUPABASE_URL.startsWith("PASTE");
+const db = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let session = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = u => /^https:\/\//.test(u || "") ? u : "";
+
+function renderAuth(){
+  const el = document.getElementById("auth");
+  if(!configured){ el.innerHTML = ""; return; }
+  if(session){
+    const m = session.user.user_metadata || {};
+    el.innerHTML = `<div class="user"><img src="${esc(m.avatar_url)}" alt=""><span>${esc(m.user_name || m.name || "کاربر")}</span><button class="ghost" id="out">خروج</button></div>`;
+    document.getElementById("out").onclick = () => db.auth.signOut();
+  } else {
+    el.innerHTML = `<button id="in">ورود با گیت‌هاب</button>`;
+    document.getElementById("in").onclick = () =>
+      db.auth.signInWithOAuth({provider:"github", options:{redirectTo: location.origin + location.pathname}});
+  }
+}
+
+let games = [];
+function renderList(){
+  const list = document.getElementById("list");
+  if(!games.length){ list.textContent = "هنوز فارسی‌سازی اضافه نشده است."; return; }
+  list.innerHTML = games.map(g => {
+    const url = safeUrl(g.download);
+    let action;
+    if(!url) action = `<span class="soonlabel">به‌زودی</span>`;
+    else if(REQUIRE_LOGIN_TO_DOWNLOAD && !session) action = `<span class="soonlabel">برای دانلود وارد شو</span>`;
+    else action = `<a class="btn" href="${esc(url)}">دانلود</a>`;
+    return `<article class="game ${url ? "" : "soon"}">
+      <div><h2>${esc(g.title)}</h2><p>${esc(g.description)}</p><span class="tag">${esc(g.version || "")}</span></div>
+      ${action}</article>`;
+  }).join("");
+}
+
+async function init(){
+  if(!configured){
+    document.getElementById("notice").innerHTML =
+      `<div class="notice">لاگین هنوز تنظیم نشده. مقدارهای SUPABASE_URL و SUPABASE_ANON_KEY را در index.html وارد کن.</div>`;
+  } else {
+    const { data } = await db.auth.getSession();
+    session = data.session;
+    db.auth.onAuthStateChange((_e, s) => { session = s; renderAuth(); renderList(); });
+  }
+  renderAuth();
+  try{
+    games = await (await fetch("games.json")).json();
+  }catch(e){
+    document.getElementById("list").textContent = "فایل games.json خوانده نشد.";
+    return;
+  }
+  renderList();
+}
+init();
+</script>
+</body>
+</html>
